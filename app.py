@@ -11,7 +11,7 @@ from music21 import environment
 
 # Configure MuseScore path for PNG rendering
 us = environment.UserSettings()
-mscore_path = os.getenv('MUSESCORE_PATH', '/usr/bin/mscore3')
+mscore_path = os.getenv('MUSESCORE_PATH', '/usr/bin/mscore4')  # Default path for MuseScore 4 on Linux
 us['musescoreDirectPNGPath'] = mscore_path
 
 # ─────────────── Flask App Setup ───────────────
