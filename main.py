@@ -47,23 +47,3 @@ if __name__ == "__main__":
         print("[ERROR] Please put an 'input.wav' file in the project folder.")
     else:
         main()
-
-
-
-#Module Roles
-
-# -audio_io handles all audio loading and waveform plotting.
-# -pitch_detect uses Librosa’s piptrack to turn audio frequencies into a stream of timestamped MIDI notes.
-# -midi_writer packages those notes into a .mid file via PrettyMIDI.
-# -notation uses Music21 (and optionally MuseScore) to turn the MIDI into standard MusicXML and a PNG image of the sheet music.
-
-#Flow of Control
-
-# 1) Load & visualize: Quick sanity check that the audio file is correct.
-# 2) Detect: Extract raw pitch data → quantized into MIDI note numbers.
-# 3) Write MIDI: Capture that quantized data in a portable MIDI file.
-# 4) Convert & render: Transform the MIDI into notation (MusicXML/PDF/PNG) for human-friendly review.
-
-#Optional PNG Rendering
-# -If musescore_exe is blank, the code still produces .mid and .musicxml outputs, but skips the potentially memory-heavy PNG step.
-# -Providing a valid MuseScore path enables direct, automated sheet-music creation without manual steps.

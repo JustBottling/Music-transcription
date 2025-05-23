@@ -1,36 +1,48 @@
+# app.py
+
 import os
 import traceback
-import logging
-from flask import Flask, request, render_template, send_from_directory, redirect, flash
-from audio_io import load_audio
-from pitch_detect import detect_midi_notes
-from midi_writer import write_midi
-from notation import midi_to_sheet
-from music21 import environment
+from flask import (
+    Flask,            # Core Flask application class
+    request,          # To access incoming request data (files, form data)
+    render_template,  # For rendering HTML templates
+    send_from_directory,  # To serve static files from a directory
+    redirect,         # To redirect the client to a different endpoint
+    flash             # To show one-time messages to the user
+)
+from audio_io import load_audio             # Load & preprocess audio
+from pitch_detect import detect_midi_notes  # Pitch-to-note conversion
+from midi_writer import write_midi          # Write detected notes to MIDI
+from notation import midi_to_sheet          # Convert MIDI → MusicXML (and optionally PNG)
+from music21 import environment             # For configuring MuseScore path
 
-# --- BEGIN MuseScore path configuration  -------------------------
-mscore_path = os.getenv('MUSESCORE_PATH')
-if mscore_path:
-    if os.path.exists(mscore_path):
-        us = environment.UserSettings()
-        us['musescoreDirectPNGPath'] = mscore_path
-        logging.info(f"Configured MuseScore for PNG output at: {mscore_path}")
-    else:
-        logging.warning(
-            f"MUSESCORE_PATH set to '{mscore_path}' but that file does not exist; "
-            "PNG rendering will be disabled."
-        )
-# --- END MuseScore path configuration  ---------------------------
+# ─────────────── MuseScore Configuration ───────────────
+# Allow user to specify their local MuseScore executable via environment var
+mscore = os.getenv('MUSESCORE_PATH')
+if mscore:
+    us = environment.UserSettings()
+    # Tell music21 where to find MuseScore for PNG rendering
+    us['musescoreDirectPNGPath'] = mscore
 
+# ─────────────── Flask App Setup ───────────────
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'static'
+# Directory where uploaded audio and generated outputs go
+app.config['UPLOAD_FOLDER']      = 'static'
+# Only accept these audio file extensions
 app.config['ALLOWED_EXTENSIONS'] = {'wav', 'mp3', 'flac'}
+# Secret key for session cookies & flashing messages
 app.secret_key = os.getenv('SECRET_KEY', 'replace-with-secure-secret')
 
-
 def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+    """
+    Check that a filename has one of the allowed extensions.
+    """
+    return (
+        '.' in filename and
+        filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+    )
 
+# ─────────────── Main Route ───────────────
 @app.route('/', methods=['GET', 'POST'])
 def index():
     try:
@@ -45,21 +57,24 @@ def index():
             # Build file paths for input audio and outputs
             ext        = file.filename.rsplit('.', 1)[1].lower()
             audio_path = os.path.join(app.config['UPLOAD_FOLDER'], f'input.{ext}')
-            midi_path = os.path.join(app.config['UPLOAD_FOLDER'], 'output.mid')
-            xml_path = os.path.join(app.config['UPLOAD_FOLDER'], 'output.musicxml')
-            png_path = os.path.join(app.config['UPLOAD_FOLDER'], 'output_sheet.png')
+            midi_path  = os.path.join(app.config['UPLOAD_FOLDER'], 'output.mid')
+            xml_path   = os.path.join(app.config['UPLOAD_FOLDER'], 'output.musicxml')
+            # We skip PNG rendering here to save resources
+            # png_path = os.path.join(app.config['UPLOAD_FOLDER'], 'output_sheet.png')
 
             # Save uploaded audio to disk
             file.save(audio_path)
+
+            # 1) Load audio into waveform array y, sampling rate sr
             y, sr = load_audio(audio_path)
+            # 2) Detect MIDI notes from waveform
             notes = detect_midi_notes(y, sr)
+            # 3) Write those notes out as a .mid file
             write_midi(notes, midi_path)
+            # 4) Convert .mid to MusicXML (skipping PNG)
+            midi_to_sheet(midi_path, xml_path, png_output=None)
 
-            try:
-                midi_to_sheet(midi_path, xml_path, png_output=png_path)
-            except SystemExit as e:
-                app.logger.warning('PNG rendering failed: %s', e)
-
+            # Render results page with links to generated files
             return render_template(
                 'index.html',
                 audio_file=os.path.basename(audio_path),
@@ -68,8 +83,11 @@ def index():
                 png_file=None
             )
 
+        # On GET, just show the upload form
         return render_template('index.html')
-    except BaseException as e:
+
+    except BaseException:
+        # Catch any error, log its traceback, and show a friendly message
         tb = traceback.format_exc()
         app.logger.error('Unhandled exception in index():\n%s', tb)
         flash('Something went wrong. Please try again.')
