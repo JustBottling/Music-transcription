@@ -1,7 +1,6 @@
-# app.py
-
 import os
 import traceback
+import logging
 from flask import Flask, request, render_template, send_from_directory, redirect, flash
 from audio_io import load_audio
 from pitch_detect import detect_midi_notes
@@ -9,19 +8,25 @@ from midi_writer import write_midi
 from notation import midi_to_sheet
 from music21 import environment
 
-# Configure MuseScore path for PNG rendering
-us = environment.UserSettings()
-mscore_path = os.getenv('MUSESCORE_PATH', '/usr/bin/mscore4')  # Default path for MuseScore 4 on Linux
-us['musescoreDirectPNGPath'] = mscore_path
+# --- BEGIN MuseScore path configuration  -------------------------
+mscore_path = os.getenv('MUSESCORE_PATH')
+if mscore_path:
+    if os.path.exists(mscore_path):
+        us = environment.UserSettings()
+        us['musescoreDirectPNGPath'] = mscore_path
+        logging.info(f"Configured MuseScore for PNG output at: {mscore_path}")
+    else:
+        logging.warning(
+            f"MUSESCORE_PATH set to '{mscore_path}' but that file does not exist; "
+            "PNG rendering will be disabled."
+        )
+# --- END MuseScore path configuration  ---------------------------
 
-# ─────────────── Flask App Setup ───────────────
 app = Flask(__name__)
-# Directory where uploaded audio and generated outputs go
-app.config['UPLOAD_FOLDER']      = 'static'
-# Only accept these audio file extensions
+app.config['UPLOAD_FOLDER'] = 'static'
 app.config['ALLOWED_EXTENSIONS'] = {'wav', 'mp3', 'flac'}
-# Secret key for session cookies & flashing messages
 app.secret_key = os.getenv('SECRET_KEY', 'replace-with-secure-secret')
+
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
